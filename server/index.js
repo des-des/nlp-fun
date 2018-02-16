@@ -103,7 +103,7 @@ const createOutputHtml = html => `
   <head>
     <style>
       .concept {
-        color: yellow;
+        color: blue;
       }
     </style>
   </head>
