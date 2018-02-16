@@ -14,6 +14,9 @@
     "env2": "^2.2.0",
     "guardian-js": "^1.0.11",
     "html-to-text": "^3.3.0",
+    "koa": "^2.5.0",
+    "koa-router": "^7.4.0",
+    "koa-static": "^4.0.2",
     "redis": "^2.8.0",
     "uuid": "^3.2.1"
   }
