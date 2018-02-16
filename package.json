@@ -1,0 +1,18 @@
+{
+  "name": "nlp-stage-0",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "compromise": "^11.4.0",
+    "env2": "^2.2.0",
+    "guardian-js": "^1.0.11",
+    "redis": "^2.8.0"
+  }
+}
