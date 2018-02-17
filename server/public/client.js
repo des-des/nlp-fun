@@ -7,7 +7,14 @@
         config.children = config.children || []
 
         const domNode = document.createElement(config.tag)
-        domNode.classList.add(config.classNames)
+
+        if (config.classNames) {
+          config.classNames
+            .split(' ')
+            .forEach(function(className) {
+              domNode.classList.add(className)
+            })
+        }
 
         Object.keys(config.attributes).forEach(function(attributeName) {
           domNode.setAttribute(attributeName, config.attributes[attributeName])
@@ -76,7 +83,7 @@
   var nounNode = span(function(content) {
     return {
       textContent: content,
-      classNames: 'noun'
+      classNames: 'blue pointer hover-bg-black-20'
     }
   })
 
@@ -115,7 +122,8 @@
     }, { children: [], index: 0 }).children
 
     return {
-      children: children
+      children: children,
+      classNames: 'f4'
     }
   }))
 
