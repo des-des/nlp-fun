@@ -26,9 +26,9 @@ const createStore = () => {
       id,
       parentId,
       type: nodeTypes.TERM,
-      text: term.text,
+      text: term.out('text'),
       meta: {
-        tags: term.tags,
+        // tags: term.tags,
         startIndex
       }
     })
@@ -50,12 +50,12 @@ const createStore = () => {
     let text = sentence.out('text')
     let len = 0
 
-    sentence.out('terms').forEach(term => {
-      const termText = term.text
+    sentence.nouns().forEach((noun, i) => {
+      const termText = noun.out('text')
       const startIndex = text.indexOf(termText)
       const textLength = termText.length
 
-      ingestTerm(term, startIndex + len, id)
+      ingestTerm(noun, startIndex + len, id)
 
       text = text.substring(startIndex + textLength)
       len += startIndex + textLength
@@ -109,7 +109,7 @@ const createStore = () => {
       .map(id => self.get(id))
       .filter(node => node.type === 'TERM')
       .filter(term => self.get(term.parentId).parentId === articleId)
-      .filter(term => term.meta.tags.includes('Noun'))
+      // .filter(term => term.meta.tags.includes('Noun'))
       .map(term => term.id)
   }
   self.nouns = nouns
