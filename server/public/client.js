@@ -17,6 +17,10 @@
           domNode.textContent = config.textContent
         }
 
+        if (config.innerHtml) {
+          domNode.innerHtml = config.innerHtml
+        }
+
         config.children.forEach(child => {
           domNode.appendChild(child)
         })
@@ -76,16 +80,31 @@
     }
   })
 
+  var brNode = tag('br')(function() { return {} })
+
   var app = createApp('app', div(function(data) {
     let text = data.text
+
+    // console.log(text)
 
     var children = data.terms.reduce((acc, term, i) => {
       var children = acc.children
       var index = acc.index
 
-      var pre = (index < term.meta.startIndexAbs)
-        ? [textNode(text.substring(index, term.meta.startIndexAbs))]
-        : []
+      var pre = []
+      if (index < term.meta.startIndexAbs) {
+        var parts = text
+          .substring(index, term.meta.startIndexAbs)
+          .split('\n')
+
+        parts.forEach(function(part, i) {
+          pre.push(textNode(part))
+
+          if (i < parts.length - 1) {
+            pre.push(brNode())
+          }
+        })
+      }
 
       var noun = nounNode(term.text)
 
