@@ -85,8 +85,6 @@
   var app = createApp('app', div(function(data) {
     let text = data.text
 
-    // console.log(text)
-
     var children = data.terms.reduce((acc, term, i) => {
       var children = acc.children
       var index = acc.index
