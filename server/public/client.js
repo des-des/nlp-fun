@@ -106,7 +106,7 @@
           pre.push(textNode(part))
 
           if (i < parts.length - 1) {
-            pre.push(brNode())
+            // pre.push(brNode())
           }
         })
       }
@@ -150,6 +150,18 @@
         return
       }
       app.update(data)
+
+      var searchbar = dpx.searchbar()
+
+      searchbar.subscribe('SUBMIT', 'SEARCH', function ( searchText ) {
+        console.log('searhing for ', searchText)
+
+      })
+      //
+      // searchbar.subscribe('FILTER', function ( searchText ) {
+      //   console.log('searhing for ', searchText)
+      //
+      // })
     })
   }
 
