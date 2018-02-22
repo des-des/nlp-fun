@@ -12,11 +12,11 @@ const createStore = () => {
   const data = {}
 
   const set = (k, v) => {
-    data[k] = JSON.stringify(v)
+    data[k] = v
   }
   self.set = set
 
-  const get = k => JSON.parse(data[k])
+  const get = k => data[k]
   self.get = get
 
   const ingestTerm = (term, startIndex, parentId) => {
