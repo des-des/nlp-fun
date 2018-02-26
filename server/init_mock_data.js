@@ -18,7 +18,7 @@ const save = fileName => (...args) => new Promise((resolve, reject) => {
 })
 
 const api = new Guardian(process.env.GUARDIAN_API_KEY, false)
-const html = res => JSON.parse(res.body).response.content.fields.body
+const html = res => console.log(JSON.parse(res.body)) || JSON.parse(res.body).response.content.fields.body
 const targetArticleId = [
   'technology',
   '2017',

@@ -157,6 +157,11 @@
         console.log('searhing for ', searchText)
 
       })
+
+      searchbar.subscribe('INPUT', 'FILTER', function ( filterText ) {
+        console.log('filter on ', filterText)
+
+      })
       //
       // searchbar.subscribe('FILTER', function ( searchText ) {
       //   console.log('searhing for ', searchText)

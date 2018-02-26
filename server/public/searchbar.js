@@ -8,6 +8,13 @@ if (!window.dpx) window.dpx = {}
     var lastText = ''
     var inputNode = document.getElementById( id || 'search' )
 
+    nlp.plugin({
+        name: "xpx",
+        words: {
+            filter: "Verb"
+        }
+    })
+
     var pipe = function () {
 
         var args = arguments
@@ -124,13 +131,12 @@ if (!window.dpx) window.dpx = {}
 
 
             if ( isVerb ( terms[0] ) ) {
-
                 emit ( eventType, actionName, details )
             }
         }
     )
 
-    inputNode.addEventListener( 'keypress', function( event ) {
+    inputNode.addEventListener( 'keyup', function( event ) {
 
         var text = event.target.value
 

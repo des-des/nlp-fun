@@ -3,6 +3,7 @@ const nlp = require('compromise')
 
 const nodeTypes = {
   ARTICLE: 'ARTICLE',
+  BLOCK: 'BLOCK',
   SENTENCE: 'SENTENCE',
   TERM: 'TERM'
 }
@@ -10,6 +11,7 @@ const nodeTypes = {
 const createStore = () => {
   const self = {}
   const data = {}
+
 
   const set = (k, v) => {
     data[k] = v
@@ -19,14 +21,36 @@ const createStore = () => {
   const get = k => data[k]
   self.get = get
 
+  const keys = () => Object.keys(data)
+
+  const values = () => keys().map(get)
+
+  const query = query => {
+    const isMatch = record => Object
+      .keys(query)
+      .reduce((isMatch, searchKey) => {
+        if (!isMatch) return isMatch
+
+        return query[searchKey] === record[searchKey]
+      }, true)
+
+    return keys()
+      .map(get)
+      .filter(isMatch)
+  }
+  self.query = query
+
   const ingestTerm = (term, startIndex, parentId) => {
     const id = genId()
+    const text = term.out('text')
 
     set(id, {
       id,
       parentId,
       type: nodeTypes.TERM,
-      text: term.out('text'),
+      text: text,
+      offset: startIndex,
+      length: text.length,
       meta: {
         // tags: term.tags,
         startIndex
@@ -62,14 +86,18 @@ const createStore = () => {
     })
   }
 
-  const ingest = article => {
-    const doc = nlp(article)
+  const ingestBlock = (block, startIndex, parentId) => {
+    const doc = nlp(block)
     const id = genId()
 
     set(id, {
       id,
-      type: nodeTypes.ARTICLE,
-      text: doc.out('text')
+      parentId,
+      type: nodeTypes.BLOCK,
+      text: doc.out('text'),
+      meta: {
+        startIndex
+      }
     })
 
     let text = doc.out('text')
@@ -88,20 +116,33 @@ const createStore = () => {
 
     return id
   }
-  self.ingest = ingest
+  self.ingestBlock = ingestBlock
 
-  const query = searchTerm => {
-    return Object.keys(data).filter(id => {
-      const value = data[id]
+  const ingest = article => {
+    const id = genId()
 
-      if (value.type !== 'TERM') return false
-      const cleanSearchTerm = searchTerm.toLowerCase()
-      const cleanText = value.text.toLowerCase()
-
-      return cleanText.includes(cleanSearchTerm)
+    set(id, {
+      id,
+      type: nodeTypes.ARTICLE,
+      text: article
     })
+
+    let text = article
+    let len = 0
+
+    article.split('\n').forEach(blockText => {
+      const startIndex = text.indexOf(blockText)
+      const blockLength = blockText.length
+
+      ingestBlock(blockText, startIndex + len, id)
+
+      text = text.substring(startIndex + blockLength)
+      len += startIndex + blockLength
+    })
+
+    return id
   }
-  self.query = query
+  self.ingest = ingest
 
   const nouns = articleId => {
     return Object
@@ -109,7 +150,6 @@ const createStore = () => {
       .map(id => self.get(id))
       .filter(node => node.type === 'TERM')
       .filter(term => self.get(term.parentId).parentId === articleId)
-      // .filter(term => term.meta.tags.includes('Noun'))
       .map(term => term.id)
   }
   self.nouns = nouns
