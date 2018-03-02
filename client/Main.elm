@@ -19,15 +19,12 @@ main =
 init : ( Model, Cmd Msg )
 init =
     ( Model [] Nothing
-    , getArticleIds
+    , getSearchResult
     )
 
 
 
 -- MODEL
---
--- type EntityType
---     = Concept
 
 
 type alias Entity =
@@ -75,8 +72,14 @@ type BlockGroupMeta
     | SearchResultMeta SearchResultMetaInfo
 
 
+type alias BlockGroupState =
+    { collapsed : Bool
+    }
+
+
 type alias BlockGroup =
     { meta : BlockGroupMeta
+    , state : BlockGroupState
     , id : String
     , blocks : List Block
     }
@@ -93,6 +96,8 @@ type Msg
     | GetArticleIds
     | NewDocument (Result Http.Error BlockGroup)
     | GetDocument String
+    | GetSearchResult
+    | NewSearchResult (Result Http.Error (List BlockGroup))
     | BlockMouseEnter String
     | BlockMouseLeave String
     | BlockClick String
@@ -148,7 +153,24 @@ update msg model =
             ( Model [] (Just error), Cmd.none )
 
         NewDocument (Ok blockGroup) ->
-            ( { model | blockGroups = blockGroup :: model.blockGroups }, Cmd.none )
+            ( { model
+                | blockGroups = blockGroup :: model.blockGroups
+              }
+            , Cmd.none
+            )
+
+        GetSearchResult ->
+            ( model, getSearchResult )
+
+        NewSearchResult (Err error) ->
+            ( Model [] (Just error), Cmd.none )
+
+        NewSearchResult (Ok blockGroups) ->
+            ( { model
+                | blockGroups = List.concat [ blockGroups, model.blockGroups ]
+              }
+            , Cmd.none
+            )
 
         BlockMouseEnter blockId ->
             ( updateModelBlocks
@@ -204,7 +226,7 @@ view { blockGroups, error } =
             viewError error
 
         Nothing ->
-            span [] (List.map viewBlockGroup blockGroups)
+            span [ class "athelas" ] (List.map viewBlockGroup blockGroups)
 
 
 viewError : Http.Error -> Html Msg
@@ -213,47 +235,76 @@ viewError error =
 
 
 viewBlockGroup : BlockGroup -> Html Msg
-viewBlockGroup { blocks } =
-    div [ class "mh7 f3" ] (List.map viewBlock blocks)
-
-
-viewBlock : Block -> Html Msg
-viewBlock { subBlocks, state, id } =
+viewBlockGroup blockGroup =
     let
         collapsed =
-            state.collapsed
-
-        isHovering =
-            state.isHovering
+            blockGroup.state.collapsed
     in
         case collapsed of
             True ->
-                div
-                    [ class "hover-bg-near-white" ]
-                    [ span
-                        [ class "mv3 hover-bg-yellow pointer"
-                        , onMouseEnter (BlockMouseEnter id)
-                        , onMouseLeave (BlockMouseLeave id)
-                        , onClick (BlockClick id)
-                        ]
-                        [ text
-                            (case isHovering of
-                                True ->
-                                    "[expand->]"
-
-                                False ->
-                                    "[... ... ...]"
-                            )
-                        ]
-                    ]
+                viewCollapsedSearchHit blockGroup
 
             False ->
-                div [ class "mv3 hover-bg-near-white" ] (List.concatMap viewSubBlock subBlocks)
+                div
+                    [ class "f4" ]
+                    (List.map viewBlock blockGroup.blocks)
 
 
-viewCollapsedBlock : Html Msg
-viewCollapsedBlock =
-    span [ class "hover-bg-yellow" ] [ text "[ ... ]" ]
+viewBlock : Block -> Html Msg
+viewBlock block =
+    div
+        [ class "mv3 ph5 hover-bg-black-10" ]
+        (List.concatMap viewSubBlock block.subBlocks)
+
+
+
+-- viewCollapsedBlock : Block -> Html Msg
+-- viewCollapsedBlock { state, id } =
+--     div
+--         [ class "hover-bg-black-10 ph7" ]
+--         [ span
+--             [ class "mv3 hover-bg-yellow pointer"
+--             , onMouseEnter (BlockMouseEnter id)
+--             , onMouseLeave (BlockMouseLeave id)
+--             , onClick (BlockClick id)
+--             ]
+--             [ text
+--                 (case state.isHovering of
+--                     True ->
+--                         "[ expand >> ]"
+--
+--                     False ->
+--                         "[... ... ... ... ...]"
+--                 )
+-- ]
+--         ]
+
+
+viewCollapsedSearchHit : BlockGroup -> Html Msg
+viewCollapsedSearchHit blockGroup =
+    let
+        result =
+            blockGroup.blocks
+                |> List.map (\block -> reduceBlockSearchHits block.subBlocks)
+                |> reduceBlockSearchHits
+                |> viewCollapsedSubBlock
+    in
+        div
+            []
+            result
+
+
+
+--
+-- viewCollapsedBlock : Block -> Html Msg
+-- viewCollapsedBlock block =
+--     let
+--         subBlock =
+--             reduceBlockSearchHits block.subBlocks
+--     in
+--         div
+--             []
+--             (List.concatMap viewCollapsedSubBlock block.subBlocks)
 
 
 trimOffsets : Int -> List Entity -> List Entity
@@ -264,6 +315,107 @@ trimOffsets trim entities =
                 | offset = entity.offset - trim
             }
         )
+        entities
+
+
+viewCollapsedSubBlock : SubBlock -> List (Html Msg)
+viewCollapsedSubBlock subBlock =
+    let
+        searchResultsEntities =
+            List.filter
+                (\entity -> entity.entityType == "SEARCH_MATCH")
+                subBlock.entities
+    in
+        case searchResultsEntities of
+            [] ->
+                []
+
+            _ ->
+                viewSubBlockSearchHits
+                    { subBlock
+                        | entities = searchResultsEntities
+                    }
+
+
+reduceBlockSearchHitsReducer : SubBlock -> SubBlock -> SubBlock
+reduceBlockSearchHitsReducer subBlock acc =
+    let
+        content =
+            acc.content
+
+        entities =
+            acc.entities
+
+        filterEntities =
+            (\entity -> entity.entityType == "SEARCH_MATCH")
+
+        mapEnties =
+            (\entity ->
+                { entity
+                    | offset = entity.offset + String.length content
+                }
+            )
+
+        newEntities =
+            subBlock.entities
+                |> List.filter filterEntities
+                |> List.map mapEnties
+    in
+        SubBlock
+            (acc.content ++ subBlock.content)
+            (entities ++ newEntities)
+            acc.id
+
+
+reduceBlockSearchHits : List SubBlock -> SubBlock
+reduceBlockSearchHits subBlocks =
+    List.foldl
+        reduceBlockSearchHitsReducer
+        (SubBlock "" [] "0")
+        subBlocks
+
+
+viewSubBlockSearchHits : SubBlock -> List (Html Msg)
+viewSubBlockSearchHits { content, entities, id } =
+    -- should be foldr I think
+    List.foldl
+        (\entity ->
+            (\result ->
+                let
+                    contextLength =
+                        30
+
+                    preText =
+                        "... "
+                            ++ (String.slice
+                                    (entity.offset - contextLength)
+                                    (entity.offset)
+                                    content
+                               )
+
+                    searchTerm =
+                        String.slice
+                            (entity.offset)
+                            (entity.offset + entity.length)
+                            content
+
+                    endText =
+                        String.slice
+                            (entity.offset + entity.length)
+                            (entity.offset + entity.length + contextLength)
+                            content
+                in
+                    (List.concat
+                        [ result
+                        , [ span [] [ text preText ]
+                          , span [ class "bg-yellow" ] [ text searchTerm ]
+                          , span [] [ text endText ]
+                          ]
+                        ]
+                    )
+            )
+        )
+        []
         entities
 
 
@@ -307,7 +459,7 @@ viewSubBlock { content, entities, id } =
 viewEntity : String -> Html Msg
 viewEntity content =
     span
-        [ class "bg-black-20 hover-bg-light-blue pointer"
+        [ class "bg-black-10 hover-bg-light-blue pointer"
         ]
         [ text content ]
 
@@ -335,7 +487,9 @@ withDefault default decoder =
 
 getArticleIds : Cmd Msg
 getArticleIds =
-    Http.send ArticleIds (Http.get "http://localhost:3000/api/v1/articles" decodeArticleIds)
+    Http.send
+        ArticleIds
+        (Http.get "http://localhost:3000/api/v1/articles" decodeArticleIds)
 
 
 decodeArticleIds : Decode.Decoder (List String)
@@ -350,6 +504,15 @@ getDocument articleId =
             "http://localhost:3000/api/v2/articles/" ++ articleId
     in
         Http.send NewDocument (Http.get url decodeBlockGroup)
+
+
+getSearchResult : Cmd Msg
+getSearchResult =
+    let
+        url =
+            "http://localhost:3000/api/v1/search"
+    in
+        Http.send NewSearchResult (Http.get url decodeBlockGroups)
 
 
 decodeEntity : Decode.Decoder Entity
@@ -390,20 +553,32 @@ decodeBlockGroupMeta =
             (\blockGroupType ->
                 case blockGroupType of
                     "ARTICLE" ->
-                        -- lol I do not know what I am doing this is evil
-                        Decode.map (\str -> DocumentMeta (DocumentMetaInfo str))
+                        Decode.map
+                            (\str ->
+                                -- lol what I am doing
+                                DocumentMeta (DocumentMetaInfo str)
+                            )
                             (Decode.field "title" Decode.string)
 
                     _ ->
                         -- should be another case here
-                        Decode.map (\str -> SearchResultMeta (SearchResultMetaInfo str))
+                        Decode.map
+                            (\str ->
+                                SearchResultMeta (SearchResultMetaInfo str)
+                            )
                             (Decode.field "searchText" Decode.string)
             )
 
 
 decodeBlockGroup : Decode.Decoder BlockGroup
 decodeBlockGroup =
-    Decode.map3 BlockGroup
+    Decode.map4 BlockGroup
         decodeBlockGroupMeta
+        (Decode.succeed { collapsed = True })
         (Decode.field "id" Decode.string)
         (Decode.field "blocks" (Decode.list decodeBlock))
+
+
+decodeBlockGroups : Decode.Decoder (List BlockGroup)
+decodeBlockGroups =
+    Decode.list decodeBlockGroup
