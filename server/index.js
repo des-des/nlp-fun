@@ -8,7 +8,6 @@ const app = require('./app.js')
 
 const mockHtml = fs.readFileSync(path.join(__dirname, 'mock_data.html'))
 const mockText = htmlToText.fromString(mockHtml, { wordwrap: false })
-console.log(mockText)
 
 store.ingest(mockText)
 

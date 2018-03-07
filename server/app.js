@@ -58,7 +58,7 @@ const getArticleDataV2 = articleId => {
     blocks: store
       .query(blockQuery(articleId))
       .map((block, i) => ({
-        collapsed: (i === 10),
+        collapsed: false,
         id: block.id,
         subBlocks: store
           .query(sentenceQuery(block.id))
@@ -93,65 +93,46 @@ api.get(
 )
 
 api.get(
-  '/api/search',
+  '/api/v1/search',
   ctx => {
-    // const {
-    //   query: text
-    // } = ctx
 
     const searchText = 'NSA'
 
     const articleHit = require('./mocks/document_1.json')
 
-    const result = {
-      type: 'SEARCH_RESULT',
+    const result = [{
       searchText,
-      hits: [{
-        type: 'DOCUMENT',
-        blocks: articleHit.blocks
-          .map(block => {
-            const containsText = block.text.includes(searchText)
+      id: '1',
+      type: 'SEARCH_RESULT',
+      blocks: articleHit.blocks
+        .map(block => {
+          const subBlocks = block.subBlocks.map(subBlock => {
 
-            if (!containsText) {
-              return {
-                ...block,
-                collapsed: true
-              }
-            }
 
-            const subBlocks = block.subBlocks.map(subBlock => {
-              const containsText = subBlock.text.includes(searchText)
-
-              if (!containsText) {
-                return {
-                  ...subBlock,
-                  collapsed: true,
-                }
-              }
-
-              const newEntities = subBlock.entities.concat({
-                type: 'SEARCH_MATCH',
-                offset: subBlock.text.indexOf(searchText),
+            const newEntities = subBlock.content.includes(searchText)
+              ? subBlock.entities.concat({
+                entityType: 'SEARCH_MATCH',
+                offset: subBlock.content.indexOf(searchText),
                 length: searchText.length
-              })
+              }) : subBlock.entities
 
-              newEntities.sort((a, b) => a.offset < b.offset)
-
-              return {
-                ...subblock,
-                collapsed: false,
-                entities: newEntities
-              }
-            })
+            newEntities.sort((a, b) => a.offset < b.offset)
 
             return {
-              ...block,
-              collapsed: false,
-              subBlocks
+              ...subBlock,
+              entities: newEntities
             }
           })
-      }]
-    }
+
+          return {
+            ...block,
+            collapsed: true,
+            subBlocks
+          }
+        })
+    }]
+
+    ctx.body = result
   }
 )
 
