@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "elm-live Main.elm --output=public/elm.js --dir=public --open --debug --pushstate"
+    "dev": "elm-live src/App.elm --output=public/elm.js --dir=public --open --debug --pushstate"
   },
   "keywords": [],
   "author": "",
