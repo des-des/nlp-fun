@@ -28,7 +28,7 @@ getSearch : Cmd Msg
 getSearch =
     let
         url =
-            "http://localhost:3000/api/v1/search"
+            "http://localhost:3000/api/v1/search?text=Trump"
     in
         Http.send NewSearch (Http.get url decodeSearch)
 
@@ -90,8 +90,9 @@ decodeDocument =
 
 decodeSearchHit : Decode.Decoder SearchHit
 decodeSearchHit =
-    Decode.map2 SearchHit
+    Decode.map3 SearchHit
         (Decode.succeed (SearchHitState True))
+        (Decode.field "index" Decode.int)
         (Decode.field "document" decodeDocument)
 
 

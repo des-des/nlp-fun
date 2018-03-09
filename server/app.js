@@ -53,7 +53,7 @@ const getArticleDataV2 = articleId => {
 
   return {
     id: articleId,
-    title: 'some article',
+    title: 'The great British Brexit robbery: how our democracy was hijacked',
     type: 'ARTICLE',
     blocks: store
       .query(blockQuery(articleId))
@@ -96,14 +96,16 @@ api.get(
   '/api/v1/search',
   ctx => {
 
-    const searchText = 'NSA'
+    console.log(ctx.query);
+
+    const searchText = ctx.query.text
 
     const articleHit = require('./mocks/document_1.json')
 
     const result = {
       searchText,
-      id: '1',
       hits: [{
+        index: 0,
         document: {
           ...articleHit,
           blocks: articleHit.blocks

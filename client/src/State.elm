@@ -10,7 +10,8 @@ import Types exposing (..)
 init : ( Model, Cmd Msg )
 init =
     ( Model [] Nothing
-    , Rest.getSearch
+    , Rest.getArticleIds
+      -- , Rest.getArticleIds
     )
 
 
@@ -25,7 +26,7 @@ update msg model =
             ( model, Rest.getArticleIds )
 
         ArticleIds (Err error) ->
-            ( Model [] (Just error), Cmd.none )
+            ( Model [] (Just error), Rest.getSearch )
 
         ArticleIds (Ok ids) ->
             case ids of
@@ -42,8 +43,8 @@ update msg model =
             ( Model [] (Just error), Cmd.none )
 
         NewDocument (Ok document) ->
-            ( addViewFragment (FragmentDocument document) model
-            , Cmd.none
+            ( addViewFragment (DocumentContent document) model
+            , Rest.getSearch
             )
 
         GetSearch ->
@@ -53,7 +54,48 @@ update msg model =
             ( Model [] (Just error), Cmd.none )
 
         NewSearch (Ok search) ->
-            ( addViewFragment (FragmentSearch search) model
+            ( addViewFragment (SearchContent search) model
+            , Cmd.none
+            )
+
+        ToggleFragmentCollapsed fragmentIndex ->
+            ( updateFragment
+                (\fragment ->
+                    let
+                        fragmentState =
+                            fragment.state
+                    in
+                        { fragment
+                            | state =
+                                { fragmentState
+                                    | isCollapsed =
+                                        not fragmentState.isCollapsed
+                                }
+                        }
+                )
+                fragmentIndex
+                model
+            , Cmd.none
+            )
+
+        ExpandSearchResult fragmentIndex searchHitIndex ->
+            ( updateSearchHit
+                (\searchHit ->
+                    let
+                        searchHitState =
+                            searchHit.state
+                    in
+                        { searchHit
+                            | state =
+                                { searchHitState
+                                    | isCollapsed =
+                                        False
+                                }
+                        }
+                )
+                fragmentIndex
+                searchHitIndex
+                model
             , Cmd.none
             )
 

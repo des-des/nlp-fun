@@ -13,6 +13,8 @@ type Msg
     | GetDocument String
     | GetSearch
     | NewSearch (Result Http.Error Search)
+    | ToggleFragmentCollapsed Int
+    | ExpandSearchResult Int Int
 
 
 
@@ -67,6 +69,7 @@ type alias Document =
 
 type alias SearchHit =
     { state : SearchHitState
+    , index : Int
     , document : Document
     }
 
@@ -77,9 +80,21 @@ type alias Search =
     }
 
 
-type Fragment
-    = FragmentDocument Document
-    | FragmentSearch Search
+type alias FragmentState =
+    { isCollapsed : Bool
+    }
+
+
+type FragmentContent
+    = DocumentContent Document
+    | SearchContent Search
+
+
+type alias Fragment =
+    { index : Int
+    , state : FragmentState
+    , content : FragmentContent
+    }
 
 
 type alias Model =
@@ -97,9 +112,113 @@ model =
 -- HELPERS
 
 
-addViewFragment : Fragment -> Model -> Model
-addViewFragment viewFragment model =
-    { model | fragments = viewFragment :: model.fragments }
+mapFragments : (Fragment -> Fragment) -> Model -> Model
+mapFragments mapper model =
+    { model | fragments = List.map mapper model.fragments }
+
+
+updateFragment : (Fragment -> Fragment) -> Int -> Model -> Model
+updateFragment update index model =
+    { model
+        | fragments =
+            List.map
+                (\fragment ->
+                    if fragment.index == index then
+                        update fragment
+                    else
+                        fragment
+                )
+                model.fragments
+    }
+
+
+updateSearchHit : (SearchHit -> SearchHit) -> Int -> Int -> Model -> Model
+updateSearchHit update fragmentIndex searchHitIndex model =
+    updateFragment
+        (\fragment ->
+            case fragment.content of
+                DocumentContent document ->
+                    fragment
+
+                SearchContent search ->
+                    let
+                        newHits =
+                            List.map
+                                (\searchHit ->
+                                    if searchHit.index == searchHitIndex then
+                                        update searchHit
+                                    else
+                                        searchHit
+                                )
+                                search.hits
+
+                        newSearch =
+                            { search | hits = newHits }
+                    in
+                        { fragment
+                            | content = SearchContent newSearch
+                        }
+        )
+        fragmentIndex
+        model
+
+
+
+--
+-- updateDocument : (Document -> Document) -> Int -> Model -> Model
+-- updateDocument update documentId model =
+--     let
+--         updateDocument =
+--             (\document ->
+--                 if document.id == documentId then
+--                     update document
+--                 else
+--                     document
+--             )
+--     in
+--         mapFragments
+--             (\fragment ->
+--                 case fragment.content of
+--                     SearchContent search ->
+--                         List.map
+--                             (\hit ->
+--                                 updateDocument hit.document
+--                             )
+--                             search.hits
+--
+--                     DocumentContent document ->
+--                         updateDocument document
+--             )
+--             model
+
+
+mapFragmentStates : (FragmentState -> FragmentState) -> Model -> Model
+mapFragmentStates mapper model =
+    { model
+        | fragments =
+            List.map
+                (\fragment -> { fragment | state = mapper fragment.state })
+                model.fragments
+    }
+
+
+addViewFragment : FragmentContent -> Model -> Model
+addViewFragment fragmentContent model =
+    let
+        fragments =
+            model.fragments
+
+        newFragment =
+            Fragment (List.length fragments) (FragmentState False) fragmentContent
+
+        oldFragments =
+            fragments
+                |> List.map
+                    (\fragment ->
+                        { fragment | state = (FragmentState True) }
+                    )
+    in
+        { model | fragments = newFragment :: oldFragments }
 
 
 

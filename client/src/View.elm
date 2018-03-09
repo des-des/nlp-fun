@@ -17,32 +17,95 @@ root { fragments, error } =
             viewError error
 
         Nothing ->
-            span [ class "athelas" ] (List.map viewFragment fragments)
+            span
+                [ class "athelas f5" ]
+                (viewVerticleRule :: (List.map viewFragment fragments))
 
 
 viewFragment : Fragment -> Html Msg
 viewFragment fragment =
-    case fragment of
-        FragmentDocument document ->
+    let
+        headerText =
+            case fragment.content of
+                DocumentContent document ->
+                    "DOCUMENT"
+
+                SearchContent search ->
+                    "SEARCH RESULTS: \"" ++ search.searchText ++ "\""
+
+        header =
+            viewFragmentHeader fragment.index headerText fragment.state.isCollapsed
+
+        content =
+            case fragment.state.isCollapsed of
+                True ->
+                    span [] []
+
+                False ->
+                    viewFragmentContent fragment.index fragment.content
+    in
+        div
+            []
+            [ header
+            , div [ class "mh4" ] [ content ]
+            , viewVerticleRule
+            ]
+
+
+viewVerticleRule : Html Msg
+viewVerticleRule =
+    hr [ class "ma3 bb bw1 b--black-10" ] []
+
+
+viewFragmentHeader : Int -> String -> Bool -> Html Msg
+viewFragmentHeader fragmentIndex description isCollapsed =
+    let
+        toggleIcon =
+            if isCollapsed then
+                icon "arrow_up"
+            else
+                icon "arrow_down"
+    in
+        div
+            []
+            [ div
+                [ class "cf mh4" ]
+                [ span [ class "f4" ] [ text description ]
+                , span
+                    [ class "fr pointer"
+                    , onClick (ToggleFragmentCollapsed fragmentIndex)
+                    ]
+                    [ toggleIcon ]
+                ]
+            ]
+
+
+viewFragmentContent : Int -> FragmentContent -> Html Msg
+viewFragmentContent fragmentIndex fragmentContent =
+    case fragmentContent of
+        DocumentContent document ->
             viewDocument document
 
-        FragmentSearch search ->
-            viewSearch search
+        SearchContent search ->
+            viewSearch fragmentIndex search
 
 
 viewDocument : Document -> Html Msg
 viewDocument document =
     let
+        titleElement =
+            h1 [ class "f4 fw3" ] [ text document.title ]
+
         blockElements =
             List.map viewBlock document.blocks
     in
-        div [] blockElements
+        div [] (titleElement :: blockElements)
 
 
 viewBlock : Block -> Html Msg
 viewBlock block =
     div
-        [ class "mv3 ph5 hover-bg-black-10" ]
+        [ class "mv3 ph2" ]
         (List.concatMap viewSubBlock block.subBlocks)
 
 
@@ -101,7 +164,7 @@ viewTextElement classString content =
 
 viewEntity : String -> Html Msg
 viewEntity =
-    viewTextElement "bg-black-10 hover-bg-light-blue pointer"
+    viewTextElement ""
 
 
 viewSearchResultText : String -> Html Msg
@@ -114,163 +177,225 @@ viewError error =
     span [ class "red" ] [ text (toString error) ]
 
 
-viewSearch : Search -> Html Msg
-viewSearch search =
-    div [] (List.map viewSearchHit search.hits)
+viewSearch : Int -> Search -> Html Msg
+viewSearch fragmentIndex search =
+    div [] (List.map (viewSearchHit fragmentIndex) search.hits)
 
 
-viewSearchHit : SearchHit -> Html Msg
-viewSearchHit searchHit =
+viewSearchHit : Int -> SearchHit -> Html Msg
+viewSearchHit fragmentIndex searchHit =
     let
         isCollapsed =
             searchHit.state.isCollapsed
     in
         case isCollapsed of
             True ->
-                viewCollapsedSearchHit searchHit
+                viewCollapsedSearchHit fragmentIndex searchHit
 
             False ->
                 viewExpandedSearchHit searchHit
 
 
-
---
---
--- viewBlockGroup : BlockGroup -> Html Msg
--- viewBlockGroup blockGroup =
---     let
---         collapsed =
---             blockGroup.state.collapsed
---     in
---         case collapsed of
---             True ->
---                 viewCollapsedSearchHit blockGroup
---
---             False ->
---                 div
---                     [ class "f4" ]
---                     (List.map viewBlock blockGroup.blocks)
---
+subBlockHasSearchHit : SubBlock -> Bool
+subBlockHasSearchHit subBlock =
+    List.foldl
+        (\entity ->
+            (\hasSearchHit ->
+                if (hasSearchHit) then
+                    True
+                else
+                    entity.entityType == "SEARCH_MATCH"
+            )
+        )
+        False
+        subBlock.entities
 
 
-viewCollapsedSearchHit : SearchHit -> Html Msg
-viewCollapsedSearchHit searchHit =
+blockHasSearchHit : Block -> Bool
+blockHasSearchHit block =
+    List.foldl
+        (\subBlock ->
+            (\hasSearchHit ->
+                if (hasSearchHit) then
+                    True
+                else
+                    subBlockHasSearchHit subBlock
+            )
+        )
+        False
+        block.subBlocks
+
+
+viewCollapsedSearchHit : Int -> SearchHit -> Html Msg
+viewCollapsedSearchHit fragmentIndex searchHit =
     let
+        sourceDocument =
+            searchHit.document
+
         document =
-            searchHit
-                |> .document
-                |> filterDocumentEntities (\entity -> entity.entityType == "SEARCH_MATCH")
+            sourceDocument
+                |> filterDocumentEntities
+                    (\entity ->
+                        entity.entityType == "SEARCH_MATCH"
+                    )
 
         result =
             document.blocks
-                |> List.map (\block -> reduceBlockSearchHits block.subBlocks)
-                |> reduceBlockSearchHits
-                |> viewCollapsedSubBlock
+                |> List.filter blockHasSearchHit
+                |> List.map viewCollapsedSearchHitBlock
+
+        maxHits =
+            5
+
+        sliced =
+            List.take maxHits result
+
+        numberCut =
+            (List.length result) - maxHits
+
+        endTextSpan =
+            if numberCut > 0 then
+                span [] [ text ("+ " ++ (toString numberCut) ++ " more paragraphs") ]
+            else
+                span [] [ text "" ]
+
+        title =
+            h3
+                [ class "f4 mt0" ]
+                [ text searchHit.document.title ]
     in
         div
-            []
-            (result
+            [ class "ba bw1 pa3 b--light-gray pointer hover-bg-light-gray"
+            , onClick (ExpandSearchResult fragmentIndex searchHit.index)
+            ]
+            (title :: sliced ++ [ endTextSpan ])
+
+
+viewCollapsedSearchHitBlock : Block -> Html Msg
+viewCollapsedSearchHitBlock block =
+    let
+        subBlocks =
+            block.subBlocks
+                |> List.filter subBlockHasSearchHit
+                |> List.concatMap viewCollapsedSearchHitSubBlock
+    in
+        div
+            [ class "mv2" ]
+            ([ span [] [ text "..." ] ]
+                ++ subBlocks
                 ++ [ span [] [ text "..." ] ]
             )
 
 
-reduceBlockSearchHitsReducer : SubBlock -> SubBlock -> SubBlock
-reduceBlockSearchHitsReducer subBlock acc =
+viewCollapsedSearchHitSubBlock : SubBlock -> List (Html Msg)
+viewCollapsedSearchHitSubBlock { content, entities, id } =
     let
-        content =
-            acc.content
+        contextLength =
+            120
 
-        entities =
-            acc.entities
+        reduction =
+            List.foldl
+                (\entity ->
+                    (\result ->
+                        let
+                            nodes =
+                                result.nodes
 
-        mapEnties =
-            (\entity ->
-                { entity
-                    | offset = entity.offset + String.length content
-                }
-            )
+                            lastEntityEndIndex =
+                                result.lastEntityEndIndex
 
-        newEntities =
-            subBlock.entities
-                |> List.map mapEnties
-    in
-        SubBlock
-            (acc.content ++ subBlock.content)
-            (entities ++ newEntities)
-            acc.id
+                            lastSectionEndIndex =
+                                result.lastSectionEndIndex
 
+                            entityOffset =
+                                entity.offset
 
-reduceBlockSearchHits : List SubBlock -> SubBlock
-reduceBlockSearchHits subBlocks =
-    List.foldl
-        reduceBlockSearchHitsReducer
-        (SubBlock "" [] "0")
-        subBlocks
+                            nextStartIndex =
+                                entity.offset - contextLength
 
+                            preText =
+                                if nextStartIndex < lastSectionEndIndex then
+                                    String.slice
+                                        lastEntityEndIndex
+                                        entityOffset
+                                        content
+                                else
+                                    (String.slice
+                                        lastEntityEndIndex
+                                        lastSectionEndIndex
+                                        content
+                                    )
+                                        ++ "..."
+                                        ++ (String.slice
+                                                nextStartIndex
+                                                entityOffset
+                                                content
+                                           )
 
-viewCollapsedSubBlock : SubBlock -> List (Html Msg)
-viewCollapsedSubBlock subBlock =
-    let
-        searchResultsEntities =
-            List.filter
-                (\entity -> entity.entityType == "SEARCH_MATCH")
-                subBlock.entities
-    in
-        case searchResultsEntities of
-            [] ->
-                []
+                            preTextSpan =
+                                span [] [ text preText ]
 
-            _ ->
-                viewSubBlockSearchHits
-                    { subBlock
-                        | entities = searchResultsEntities
-                    }
+                            nextEntityEndIndex =
+                                entityOffset + entity.length
 
-
-viewSubBlockSearchHits : SubBlock -> List (Html Msg)
-viewSubBlockSearchHits { content, entities, id } =
-    -- should be foldr I think
-    List.foldl
-        (\entity ->
-            (\result ->
-                let
-                    contextLength =
-                        30
-
-                    preText =
-                        "... "
-                            ++ (String.slice
-                                    (entity.offset - contextLength)
-                                    (entity.offset)
+                            searchTerm =
+                                String.slice
+                                    entityOffset
+                                    nextEntityEndIndex
                                     content
-                               )
 
-                    searchTerm =
-                        String.slice
-                            (entity.offset)
-                            (entity.offset + entity.length)
-                            content
+                            entitySpan =
+                                span [ class "bg-yellow" ] [ text searchTerm ]
 
-                    endText =
-                        String.slice
-                            (entity.offset + entity.length)
-                            (entity.offset + entity.length + contextLength)
-                            content
-                in
-                    (List.concat
-                        [ result
-                        , [ span [] [ text preText ]
-                          , span [ class "bg-yellow" ] [ text searchTerm ]
-                          , span [] [ text endText ]
-                          ]
-                        ]
+                            nextSectionEndIndex =
+                                entityOffset + contextLength
+                        in
+                            { nodes = nodes ++ [ preTextSpan, entitySpan ]
+                            , lastEntityEndIndex = nextEntityEndIndex
+                            , lastSectionEndIndex = nextSectionEndIndex
+                            }
                     )
-            )
-        )
-        []
-        entities
+                )
+                { nodes = [], lastEntityEndIndex = 0, lastSectionEndIndex = 0 }
+                entities
+
+        nodes =
+            reduction.nodes
+
+        lastEntityEndIndex =
+            reduction.lastEntityEndIndex
+
+        lastSectionEndIndex =
+            reduction.lastSectionEndIndex
+
+        contentLength =
+            String.length content
+
+        endText =
+            if lastSectionEndIndex > contentLength then
+                String.slice
+                    lastEntityEndIndex
+                    contentLength
+                    content
+            else
+                (String.slice
+                    lastEntityEndIndex
+                    lastSectionEndIndex
+                    content
+                )
+                    ++ "..."
+
+        endTextSpan =
+            span [] [ text endText ]
+    in
+        nodes ++ [ endTextSpan ]
 
 
 viewExpandedSearchHit : SearchHit -> Html Msg
 viewExpandedSearchHit searchHit =
     viewDocument searchHit.document
+
+
+icon : String -> Html Msg
+icon name =
+    img [ src ("/icons/" ++ name ++ ".svg") ] []
