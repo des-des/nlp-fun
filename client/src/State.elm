@@ -10,7 +10,7 @@ import Types exposing (..)
 init : ( Model, Cmd Msg )
 init =
     ( Model [] Nothing
-    , Rest.getSearchResult
+    , Rest.getSearch
     )
 
 
@@ -41,70 +41,64 @@ update msg model =
         NewDocument (Err error) ->
             ( Model [] (Just error), Cmd.none )
 
-        NewDocument (Ok blockGroup) ->
-            ( { model
-                | blockGroups = blockGroup :: model.blockGroups
-              }
+        NewDocument (Ok document) ->
+            ( addViewFragment (FragmentDocument document) model
             , Cmd.none
             )
 
-        GetSearchResult ->
-            ( model, Rest.getSearchResult )
+        GetSearch ->
+            ( model, Rest.getSearch )
 
-        NewSearchResult (Err error) ->
+        NewSearch (Err error) ->
             ( Model [] (Just error), Cmd.none )
 
-        NewSearchResult (Ok blockGroups) ->
-            ( { model
-                | blockGroups = List.concat [ blockGroups, model.blockGroups ]
-              }
-            , Cmd.none
-            )
-
-        BlockMouseEnter blockId ->
-            ( updateModelBlocks
-                (\block ->
-                    if block.id == blockId then
-                        updateBlockState
-                            (\state -> { state | isHovering = True })
-                            block
-                    else
-                        block
-                )
-                model
-            , Cmd.none
-            )
-
-        BlockMouseLeave blockId ->
-            ( updateModelBlocks
-                (\block ->
-                    if block.id == blockId then
-                        updateBlockState
-                            (\state -> { state | isHovering = False })
-                            block
-                    else
-                        block
-                )
-                model
-            , Cmd.none
-            )
-
-        BlockClick blockId ->
-            ( updateModelBlocks
-                (\block ->
-                    if block.id == blockId then
-                        updateBlockState
-                            (\state -> { state | collapsed = False })
-                            block
-                    else
-                        block
-                )
-                model
+        NewSearch (Ok search) ->
+            ( addViewFragment (FragmentSearch search) model
             , Cmd.none
             )
 
 
 
+-- BlockMouseEnter blockId ->
+--     ( updateModelBlocks
+--         (\block ->
+--             if block.id == blockId then
+--                 updateBlockState
+--                     (\state -> { state | isHovering = True })
+--                     block
+--             else
+--                 block
+--         )
+--         model
+--     , Cmd.none
+--     )
+-- BlockMouseLeave blockId ->
+--     ( updateModelBlocks
+--         (\block ->
+--             if block.id == blockId then
+--                 updateBlockState
+--                     (\state -> { state | isHovering = False })
+--                     block
+--             else
+--                 block
+--         )
+--         model
+--     , Cmd.none
+--     )
+--
+-- BlockClick blockId ->
+--     ( updateModelBlocks
+--         (\block ->
+--             if block.id == blockId then
+--                 updateBlockState
+--                     (\state -> { state | collapsed = False })
+--                     block
+--             else
+--                 block
+--         )
+--         model
+--     , Cmd.none
+--     )
 -- SUBSCRIPTIONS
 
 

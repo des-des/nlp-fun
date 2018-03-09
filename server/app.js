@@ -100,37 +100,40 @@ api.get(
 
     const articleHit = require('./mocks/document_1.json')
 
-    const result = [{
+    const result = {
       searchText,
       id: '1',
-      type: 'SEARCH_RESULT',
-      blocks: articleHit.blocks
-        .map(block => {
-          const subBlocks = block.subBlocks.map(subBlock => {
+      hits: [{
+        document: {
+          ...articleHit,
+          blocks: articleHit.blocks
+          .map(block => {
+            const subBlocks = block.subBlocks.map(subBlock => {
 
+              const newEntities = subBlock.content.includes(searchText)
+                ? subBlock.entities.concat({
+                  entityType: 'SEARCH_MATCH',
+                  offset: subBlock.content.indexOf(searchText),
+                  length: searchText.length
+                }) : subBlock.entities
 
-            const newEntities = subBlock.content.includes(searchText)
-              ? subBlock.entities.concat({
-                entityType: 'SEARCH_MATCH',
-                offset: subBlock.content.indexOf(searchText),
-                length: searchText.length
-              }) : subBlock.entities
+              newEntities.sort((a, b) => a.offset < b.offset)
 
-            newEntities.sort((a, b) => a.offset < b.offset)
+              return {
+                ...subBlock,
+                entities: newEntities
+              }
+            })
 
             return {
-              ...subBlock,
-              entities: newEntities
+              ...block,
+              collapsed: true,
+              subBlocks
             }
           })
-
-          return {
-            ...block,
-            collapsed: true,
-            subBlocks
-          }
-        })
-    }]
+        }
+      }]
+    }
 
     ctx.body = result
   }

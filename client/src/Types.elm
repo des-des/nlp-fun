@@ -9,16 +9,16 @@ import Http
 type Msg
     = ArticleIds (Result Http.Error (List String))
     | GetArticleIds
-    | NewDocument (Result Http.Error BlockGroup)
+    | NewDocument (Result Http.Error Document)
     | GetDocument String
-    | GetSearchResult
-    | NewSearchResult (Result Http.Error (List BlockGroup))
-    | BlockMouseEnter String
-    | BlockMouseLeave String
-    | BlockClick String
+    | GetSearch
+    | NewSearch (Result Http.Error Search)
 
 
 
+-- | BlockMouseEnter String
+-- | BlockMouseLeave String
+-- | BlockClick String
 -- MODEL
 
 
@@ -54,34 +54,36 @@ type alias Block =
     }
 
 
-type alias DocumentMetaInfo =
-    { title : String }
-
-
-type alias SearchResultMetaInfo =
-    { searchText : String }
-
-
-type BlockGroupMeta
-    = DocumentMeta DocumentMetaInfo
-    | SearchResultMeta SearchResultMetaInfo
-
-
-type alias BlockGroupState =
-    { collapsed : Bool
+type alias SearchHitState =
+    { isCollapsed : Bool
     }
 
 
-type alias BlockGroup =
-    { meta : BlockGroupMeta
-    , state : BlockGroupState
-    , id : String
+type alias Document =
+    { title : String
     , blocks : List Block
     }
 
 
+type alias SearchHit =
+    { state : SearchHitState
+    , document : Document
+    }
+
+
+type alias Search =
+    { searchText : String
+    , hits : List SearchHit
+    }
+
+
+type Fragment
+    = FragmentDocument Document
+    | FragmentSearch Search
+
+
 type alias Model =
-    { blockGroups : List BlockGroup
+    { fragments : List Fragment
     , error : Maybe Http.Error
     }
 
@@ -95,20 +97,62 @@ model =
 -- HELPERS
 
 
-updateBlockGroups : (BlockGroup -> BlockGroup) -> Model -> Model
-updateBlockGroups updateBlockGroup model =
-    { model | blockGroups = List.map updateBlockGroup model.blockGroups }
+addViewFragment : Fragment -> Model -> Model
+addViewFragment viewFragment model =
+    { model | fragments = viewFragment :: model.fragments }
 
 
-updateModelBlocks : (Block -> Block) -> Model -> Model
-updateModelBlocks updateBlock model =
-    updateBlockGroups
-        (\blockGroup ->
-            { blockGroup
-                | blocks = List.map updateBlock blockGroup.blocks
-            }
+
+-- updateBlockGroups : (BlockGroup -> BlockGroup) -> Model -> Model
+-- updateBlockGroups updateBlockGroup model =
+--     { model | blockGroups = List.map updateBlockGroup model.blockGroups }
+
+
+updateDocumentBlocks : (Block -> Block) -> Document -> Document
+updateDocumentBlocks updateBlock document =
+    let
+        blocks =
+            document
+                |> .blocks
+                |> List.map updateBlock
+    in
+        { document | blocks = blocks }
+
+
+updateDocumentSubBlocks : (SubBlock -> SubBlock) -> Document -> Document
+updateDocumentSubBlocks updateSubBlock =
+    updateDocumentBlocks
+        (\block ->
+            let
+                subBlocks =
+                    block
+                        |> .subBlocks
+                        |> List.map updateSubBlock
+            in
+                { block | subBlocks = subBlocks }
         )
-        model
+
+
+filterDocumentEntities : (Entity -> Bool) -> Document -> Document
+filterDocumentEntities pred =
+    updateDocumentSubBlocks
+        (\subBlock ->
+            { subBlock | entities = List.filter pred subBlock.entities }
+        )
+
+
+
+--
+--
+-- updateModelBlocks : (Block -> Block) -> Model -> Model
+-- updateModelBlocks updateBlock model =
+--     updateBlockGroups
+--         (\blockGroup ->
+--             { blockGroup
+--                 | blocks = List.map updateBlock blockGroup.blocks
+--             }
+--         )
+--         model
 
 
 updateBlockState : (BlockState -> BlockState) -> Block -> Block

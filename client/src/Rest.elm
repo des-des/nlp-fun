@@ -8,24 +8,11 @@ import Types exposing (..)
 -- HTTP
 
 
-withDefault : a -> Decode.Decoder a -> Decode.Decoder a
-withDefault default decoder =
-    Decode.oneOf
-        [ decoder
-        , Decode.succeed default
-        ]
-
-
 getArticleIds : Cmd Msg
 getArticleIds =
     Http.send
         ArticleIds
         (Http.get "http://localhost:3000/api/v1/articles" decodeArticleIds)
-
-
-decodeArticleIds : Decode.Decoder (List String)
-decodeArticleIds =
-    Decode.list Decode.string
 
 
 getDocument : String -> Cmd Msg
@@ -34,16 +21,33 @@ getDocument articleId =
         url =
             "http://localhost:3000/api/v2/articles/" ++ articleId
     in
-        Http.send NewDocument (Http.get url decodeBlockGroup)
+        Http.send NewDocument (Http.get url decodeDocument)
 
 
-getSearchResult : Cmd Msg
-getSearchResult =
+getSearch : Cmd Msg
+getSearch =
     let
         url =
             "http://localhost:3000/api/v1/search"
     in
-        Http.send NewSearchResult (Http.get url decodeBlockGroups)
+        Http.send NewSearch (Http.get url decodeSearch)
+
+
+
+-- DECODERS
+
+
+withDefault : a -> Decode.Decoder a -> Decode.Decoder a
+withDefault default decoder =
+    Decode.oneOf
+        [ decoder
+        , Decode.succeed default
+        ]
+
+
+decodeArticleIds : Decode.Decoder (List String)
+decodeArticleIds =
+    Decode.list Decode.string
 
 
 decodeEntity : Decode.Decoder Entity
@@ -77,39 +81,22 @@ decodeBlock =
         decodeBlockState
 
 
-decodeBlockGroupMeta : Decode.Decoder BlockGroupMeta
-decodeBlockGroupMeta =
-    (Decode.field "type" Decode.string)
-        |> Decode.andThen
-            (\blockGroupType ->
-                case blockGroupType of
-                    "ARTICLE" ->
-                        Decode.map
-                            (\str ->
-                                -- lol what I am doing
-                                DocumentMeta (DocumentMetaInfo str)
-                            )
-                            (Decode.field "title" Decode.string)
-
-                    _ ->
-                        -- should be another case here
-                        Decode.map
-                            (\str ->
-                                SearchResultMeta (SearchResultMetaInfo str)
-                            )
-                            (Decode.field "searchText" Decode.string)
-            )
-
-
-decodeBlockGroup : Decode.Decoder BlockGroup
-decodeBlockGroup =
-    Decode.map4 BlockGroup
-        decodeBlockGroupMeta
-        (Decode.succeed { collapsed = True })
-        (Decode.field "id" Decode.string)
+decodeDocument : Decode.Decoder Document
+decodeDocument =
+    Decode.map2 Document
+        (Decode.field "title" Decode.string)
         (Decode.field "blocks" (Decode.list decodeBlock))
 
 
-decodeBlockGroups : Decode.Decoder (List BlockGroup)
-decodeBlockGroups =
-    Decode.list decodeBlockGroup
+decodeSearchHit : Decode.Decoder SearchHit
+decodeSearchHit =
+    Decode.map2 SearchHit
+        (Decode.succeed (SearchHitState True))
+        (Decode.field "document" decodeDocument)
+
+
+decodeSearch : Decode.Decoder Search
+decodeSearch =
+    Decode.map2 Search
+        (Decode.field "searchText" Decode.string)
+        (Decode.field "hits" (Decode.list decodeSearchHit))

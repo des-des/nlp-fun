@@ -11,34 +11,32 @@ import Types exposing (..)
 
 
 root : Model -> Html Msg
-root { blockGroups, error } =
+root { fragments, error } =
     case error of
         Just error ->
             viewError error
 
         Nothing ->
-            span [ class "athelas" ] (List.map viewBlockGroup blockGroups)
+            span [ class "athelas" ] (List.map viewFragment fragments)
 
 
-viewError : Http.Error -> Html Msg
-viewError error =
-    span [ class "red" ] [ text (toString error) ]
+viewFragment : Fragment -> Html Msg
+viewFragment fragment =
+    case fragment of
+        FragmentDocument document ->
+            viewDocument document
+
+        FragmentSearch search ->
+            viewSearch search
 
 
-viewBlockGroup : BlockGroup -> Html Msg
-viewBlockGroup blockGroup =
+viewDocument : Document -> Html Msg
+viewDocument document =
     let
-        collapsed =
-            blockGroup.state.collapsed
+        blockElements =
+            List.map viewBlock document.blocks
     in
-        case collapsed of
-            True ->
-                viewCollapsedSearchHit blockGroup
-
-            False ->
-                div
-                    [ class "f4" ]
-                    (List.map viewBlock blockGroup.blocks)
+        div [] blockElements
 
 
 viewBlock : Block -> Html Msg
@@ -48,18 +46,41 @@ viewBlock block =
         (List.concatMap viewSubBlock block.subBlocks)
 
 
-viewCollapsedSearchHit : BlockGroup -> Html Msg
-viewCollapsedSearchHit blockGroup =
-    let
-        result =
-            blockGroup.blocks
-                |> List.map (\block -> reduceBlockSearchHits block.subBlocks)
-                |> reduceBlockSearchHits
-                |> viewCollapsedSubBlock
-    in
-        div
-            []
-            result
+viewSubBlock : SubBlock -> List (Html Msg)
+viewSubBlock { content, entities, id } =
+    case entities of
+        [] ->
+            [ span [] [ text content ] ]
+
+        { offset, length } :: restEntities ->
+            case offset of
+                0 ->
+                    let
+                        entityText =
+                            String.slice 0 length content
+
+                        rest =
+                            viewSubBlock
+                                { content = String.dropLeft length content
+                                , entities = trimOffsets length restEntities
+                                , id = id
+                                }
+                    in
+                        (viewEntity entityText) :: rest
+
+                _ ->
+                    let
+                        entity =
+                            span [] [ text (String.slice 0 offset content) ]
+
+                        rest =
+                            viewSubBlock
+                                { content = String.dropLeft offset content
+                                , entities = trimOffsets offset entities
+                                , id = id
+                                }
+                    in
+                        entity :: rest
 
 
 trimOffsets : Int -> List Entity -> List Entity
@@ -71,6 +92,120 @@ trimOffsets trim entities =
             }
         )
         entities
+
+
+viewTextElement : String -> String -> Html Msg
+viewTextElement classString content =
+    span [ class classString ] [ text content ]
+
+
+viewEntity : String -> Html Msg
+viewEntity =
+    viewTextElement "bg-black-10 hover-bg-light-blue pointer"
+
+
+viewSearchResultText : String -> Html Msg
+viewSearchResultText =
+    viewTextElement "bg-yellow"
+
+
+viewError : Http.Error -> Html Msg
+viewError error =
+    span [ class "red" ] [ text (toString error) ]
+
+
+viewSearch : Search -> Html Msg
+viewSearch search =
+    div [] (List.map viewSearchHit search.hits)
+
+
+viewSearchHit : SearchHit -> Html Msg
+viewSearchHit searchHit =
+    let
+        isCollapsed =
+            searchHit.state.isCollapsed
+    in
+        case isCollapsed of
+            True ->
+                viewCollapsedSearchHit searchHit
+
+            False ->
+                viewExpandedSearchHit searchHit
+
+
+
+--
+--
+-- viewBlockGroup : BlockGroup -> Html Msg
+-- viewBlockGroup blockGroup =
+--     let
+--         collapsed =
+--             blockGroup.state.collapsed
+--     in
+--         case collapsed of
+--             True ->
+--                 viewCollapsedSearchHit blockGroup
+--
+--             False ->
+--                 div
+--                     [ class "f4" ]
+--                     (List.map viewBlock blockGroup.blocks)
+--
+
+
+viewCollapsedSearchHit : SearchHit -> Html Msg
+viewCollapsedSearchHit searchHit =
+    let
+        document =
+            searchHit
+                |> .document
+                |> filterDocumentEntities (\entity -> entity.entityType == "SEARCH_MATCH")
+
+        result =
+            document.blocks
+                |> List.map (\block -> reduceBlockSearchHits block.subBlocks)
+                |> reduceBlockSearchHits
+                |> viewCollapsedSubBlock
+    in
+        div
+            []
+            (result
+                ++ [ span [] [ text "..." ] ]
+            )
+
+
+reduceBlockSearchHitsReducer : SubBlock -> SubBlock -> SubBlock
+reduceBlockSearchHitsReducer subBlock acc =
+    let
+        content =
+            acc.content
+
+        entities =
+            acc.entities
+
+        mapEnties =
+            (\entity ->
+                { entity
+                    | offset = entity.offset + String.length content
+                }
+            )
+
+        newEntities =
+            subBlock.entities
+                |> List.map mapEnties
+    in
+        SubBlock
+            (acc.content ++ subBlock.content)
+            (entities ++ newEntities)
+            acc.id
+
+
+reduceBlockSearchHits : List SubBlock -> SubBlock
+reduceBlockSearchHits subBlocks =
+    List.foldl
+        reduceBlockSearchHitsReducer
+        (SubBlock "" [] "0")
+        subBlocks
 
 
 viewCollapsedSubBlock : SubBlock -> List (Html Msg)
@@ -90,44 +225,6 @@ viewCollapsedSubBlock subBlock =
                     { subBlock
                         | entities = searchResultsEntities
                     }
-
-
-reduceBlockSearchHitsReducer : SubBlock -> SubBlock -> SubBlock
-reduceBlockSearchHitsReducer subBlock acc =
-    let
-        content =
-            acc.content
-
-        entities =
-            acc.entities
-
-        filterEntities =
-            (\entity -> entity.entityType == "SEARCH_MATCH")
-
-        mapEnties =
-            (\entity ->
-                { entity
-                    | offset = entity.offset + String.length content
-                }
-            )
-
-        newEntities =
-            subBlock.entities
-                |> List.filter filterEntities
-                |> List.map mapEnties
-    in
-        SubBlock
-            (acc.content ++ subBlock.content)
-            (entities ++ newEntities)
-            acc.id
-
-
-reduceBlockSearchHits : List SubBlock -> SubBlock
-reduceBlockSearchHits subBlocks =
-    List.foldl
-        reduceBlockSearchHitsReducer
-        (SubBlock "" [] "0")
-        subBlocks
 
 
 viewSubBlockSearchHits : SubBlock -> List (Html Msg)
@@ -174,46 +271,6 @@ viewSubBlockSearchHits { content, entities, id } =
         entities
 
 
-viewSubBlock : SubBlock -> List (Html Msg)
-viewSubBlock { content, entities, id } =
-    case entities of
-        [] ->
-            [ span [] [ text content ] ]
-
-        { offset, length } :: restEntities ->
-            case offset of
-                0 ->
-                    let
-                        entityText =
-                            String.slice 0 length content
-
-                        rest =
-                            viewSubBlock
-                                { content = String.dropLeft length content
-                                , entities = trimOffsets length restEntities
-                                , id = id
-                                }
-                    in
-                        (viewEntity entityText) :: rest
-
-                _ ->
-                    let
-                        entity =
-                            span [] [ text (String.slice 0 offset content) ]
-
-                        rest =
-                            viewSubBlock
-                                { content = String.dropLeft offset content
-                                , entities = trimOffsets offset entities
-                                , id = id
-                                }
-                    in
-                        entity :: rest
-
-
-viewEntity : String -> Html Msg
-viewEntity content =
-    span
-        [ class "bg-black-10 hover-bg-light-blue pointer"
-        ]
-        [ text content ]
+viewExpandedSearchHit : SearchHit -> Html Msg
+viewExpandedSearchHit searchHit =
+    viewDocument searchHit.document
